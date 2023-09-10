@@ -68,8 +68,9 @@ func TestClient_Call(t *testing.T) {
 	client, _ := Dial("tcp", <-addrCh)
 	defer client.Close()
 	// send call
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-	defer cancel()
+	// ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	// defer cancel()
+	ctx := context.Background()
 	for i := 0; i < 10; i++ {
 		var reply int
 		err := client.Call(ctx, "Bar.Sum", Args{Num1: i, Num2: i}, &reply)
@@ -143,5 +144,3 @@ func TestXDial(t *testing.T) {
 	}
 
 }
-
-// 测试客户端Option收发

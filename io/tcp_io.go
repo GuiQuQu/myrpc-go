@@ -3,15 +3,19 @@ package myrpcio
 import (
 	"encoding/binary"
 	"io"
-	// "log"
 	"net"
 )
+
+type ReadrAndByteReader interface {
+	io.Reader
+	io.ByteReader
+}
 
 // ==== io method ====
 func SendFrame(w io.Writer, data []byte) (err error) {
 	var size [binary.MaxVarintLen64]byte
 
-	if data == nil || len(data) == 0 {
+	if len(data) == 0 {
 		n := binary.PutUvarint(size[:], uint64(0))
 		if err = write(w,size[:n]); err != nil {
 			return
@@ -35,13 +39,12 @@ func write(w io.Writer, data []byte) error {
 			return err
 		}
 		index += n
-		// log.Printf("Write:index:%d len:%d",index,len(data))
 	}
 	return nil
 }
 
-func RecvFrame(r io.Reader) (data []byte, err error) {
-	size, err := binary.ReadUvarint(r.(io.ByteReader))
+func RecvFrame(r ReadrAndByteReader) (data []byte, err error) {
+	size, err := binary.ReadUvarint(r)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +67,6 @@ func read(r io.Reader, data []byte) error {
 			}
 		}
 		index += n
-		// log.Printf("Read:index:%d len:%d",index,len(data))
 	}
 	return nil
 }

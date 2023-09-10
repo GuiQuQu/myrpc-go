@@ -94,17 +94,22 @@ func TestTaskControl(t *testing.T) {
 	for i := 0; i < taskNum; i++ {
 		go func(taskNo int) {
 			defer wg.Done()
-			for {
-				// 使用数据通道close来表示任务结束
-				select {
-				case v, ok := <-dataChan:
-					if !ok {
-						t.Logf("Task %d notify to stop\n", taskNo)
-						return
-					}
-					fmt.Printf("Task %d get data %d\n", taskNo, v)
-				}
+
+			for data := range dataChan {
+				fmt.Printf("Task %d get data %d\n", taskNo, data)
 			}
+			t.Logf("Task %d notify to stop\n", taskNo)
+			// for {
+			// 	// 使用数据通道close来表示任务结束
+			// 	select {
+			// 	case v, ok := <-dataChan:
+			// 		if !ok {
+			// 			t.Logf("Task %d notify to stop\n", taskNo)
+			// 			return
+			// 		}
+			// 		fmt.Printf("Task %d get data %d\n", taskNo, v)
+			// 	}
+			// }
 		}(i)
 	}
 	// after 3s, close dataChan
@@ -122,5 +127,3 @@ func TestTaskControl(t *testing.T) {
 	t.Logf("NumGoroutine: %d", runtime.NumGoroutine())
 
 }
-
-

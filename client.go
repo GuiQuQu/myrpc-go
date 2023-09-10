@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"myrpc/codec"
-	myrpcio "myrpc/io"
 	"net"
 	"net/http"
 	"strings"
@@ -17,7 +16,6 @@ import (
 )
 
 // 异步调用客户端
-
 type Call struct {
 	Seq           uint64      // sequence number of this call
 	ServiceMethod string      // format "Service.Method"
@@ -32,9 +30,7 @@ func (call *Call) done() {
 }
 
 type Client struct {
-	cc      codec.ClientCodec
-	bufConn *BufConn
-	opt     *Option
+	context *ClientContext
 
 	reqMutex  sync.Mutex          // protect following
 	reqHeader codec.RequestHeader // header of request will be reused
@@ -57,7 +53,7 @@ func (client *Client) Close() error {
 		return ErrShutdown
 	}
 	client.closing = true
-	return client.cc.Close()
+	return client.context.Close()
 }
 
 func (client *Client) IsAvailable() bool {
@@ -100,33 +96,19 @@ func (client *Client) terminateCalls(err error) {
 }
 
 func NewClient(conn net.Conn, opt *Option) (*Client, error) {
+	// get client context
+	clientContext, err := NewClientContext(conn, opt)
 	// get codec func
-	f := codec.NewClientCodecFuncMap[opt.CodecType]
-	if f == nil {
-		err := fmt.Errorf("rpc client:invalid codec type %s", opt.CodecType)
+	if err != nil {
 		return nil, err
-	}
-	// send options to server
-	bufConn := &BufConn{
-		ReadWriter: bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn)),
-		conn:       conn,
 	}
 
-	if err := myrpcio.SendFrame(bufConn, opt.Marshal()); err != nil {
-		err = fmt.Errorf("rpc client: send options error: %v", err)
-		_ = bufConn.Close()
-		return nil, err
-	}
-	// send to buf, then to conn
-	bufConn.Flush()
-	return newClientCodec(bufConn, f(bufConn), opt), nil
+	return newClientCodec(clientContext), nil
 }
 
-func newClientCodec(buf *BufConn, cc codec.ClientCodec, opt *Option) *Client {
+func newClientCodec(clientContext *ClientContext) *Client {
 	client := &Client{
-		bufConn: buf,
-		cc:      cc,
-		opt:     opt,
+		context: clientContext,
 		seq:     1,
 		pending: make(map[uint64]*Call),
 	}
@@ -141,7 +123,7 @@ func (client *Client) receive() {
 	var resph codec.ResponseHeader
 	for err == nil {
 		resph = codec.ResponseHeader{}
-		if err = client.cc.ReadResponseHeader(&resph); err != nil {
+		if err = client.context.ReadResponseHeader(&resph); err != nil {
 			break
 		}
 		// debug
@@ -150,15 +132,15 @@ func (client *Client) receive() {
 		switch {
 		// call not exists
 		case call == nil:
-			err = client.cc.ReadResponseBody(nil)
+			err = client.context.ReadResponseBody(nil)
 		// response return error
 		case resph.Error != "":
 			call.Error = errors.New(resph.Error)
-			err = client.cc.ReadResponseBody(nil)
+			err = client.context.ReadResponseBody(nil)
 			call.done()
 		// response return no error
 		default:
-			err = client.cc.ReadResponseBody(call.Reply)
+			err = client.context.ReadResponseBody(call.Reply)
 			if err != nil {
 				call.Error = errors.New("rpc client: reading body " + err.Error())
 			}
@@ -242,24 +224,13 @@ func (client *Client) send(call *Call) {
 	client.reqHeader.ServiceMethod = call.ServiceMethod
 	client.reqHeader.Seq = seq
 
-	// send request to buf
-	if err := client.cc.WriteRequest(&client.reqHeader, call.Args); err != nil {
+	// send request to conn
+	if err := client.context.WriteRequest(&client.reqHeader, call.Args); err != nil {
 		call := client.removeCall(seq)
 		if call != nil {
 			call.Error = err
 			call.done()
 		}
-	}
-	// buf to conn
-	if err := client.bufConn.Flush(); err != nil {
-		call := client.removeCall(seq)
-		if call != nil {
-			call.Error = err
-			call.done()
-		}
-	} else {
-		// debug
-		// log.Println("rpc client: send request success")
 	}
 }
 
