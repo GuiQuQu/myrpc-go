@@ -32,9 +32,9 @@ func (call *Call) done() {
 }
 
 type Client struct {
-	cc  codec.ClientCodec
+	cc      codec.ClientCodec
 	bufConn *BufConn
-	opt *Option
+	opt     *Option
 
 	reqMutex  sync.Mutex          // protect following
 	reqHeader codec.RequestHeader // header of request will be reused
@@ -111,7 +111,7 @@ func NewClient(conn net.Conn, opt *Option) (*Client, error) {
 		ReadWriter: bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn)),
 		conn:       conn,
 	}
-	
+
 	if err := myrpcio.SendFrame(bufConn, opt.Marshal()); err != nil {
 		err = fmt.Errorf("rpc client: send options error: %v", err)
 		_ = bufConn.Close()
@@ -119,7 +119,7 @@ func NewClient(conn net.Conn, opt *Option) (*Client, error) {
 	}
 	// send to buf, then to conn
 	bufConn.Flush()
-	return newClientCodec(bufConn,f(bufConn), opt), nil
+	return newClientCodec(bufConn, f(bufConn), opt), nil
 }
 
 func newClientCodec(buf *BufConn, cc codec.ClientCodec, opt *Option) *Client {
@@ -249,7 +249,7 @@ func (client *Client) send(call *Call) {
 			call.Error = err
 			call.done()
 		}
-	} 
+	}
 	// buf to conn
 	if err := client.bufConn.Flush(); err != nil {
 		call := client.removeCall(seq)
@@ -317,7 +317,7 @@ func DialHTTP(network, address string, opts ...*Option) (*Client, error) {
 	return dialTimeout(NewHTTPClient, network, address, opts...)
 }
 
-// support multiple protocol(simple version) 
+// support multiple protocol(simple version)
 // rpcAddr example http@localhost:1234,tcp@localhost:1234
 func XDial(rpcAddr string, opts ...*Option) (*Client, error) {
 	parts := strings.Split(rpcAddr, "@")
